@@ -14,8 +14,15 @@ fun String.isLocalId(): Boolean = startsWith(LOCAL_ID_PREFIX)
 
 private fun String.toEpochMillisOrNull(): Long? = runCatching { Instant.parse(this).toEpochMilli() }.getOrNull()
 
-/** [isStarred] is a local-only field with no Tasks API equivalent, so it must be carried in explicitly. */
-fun TaskDto.toEntity(taskListId: String, isStarred: Boolean = false): TaskEntity =
+/**
+ * Converts a server task into a row, carrying over every local-only field from [cached].
+ *
+ * Those fields (star, reminder time) have no Tasks API equivalent, so the response says nothing
+ * about them — without merging the cached row they'd silently reset on every pull. Taking the whole
+ * cached entity rather than one parameter per field means a new local-only column is preserved by
+ * default instead of being quietly dropped until someone notices.
+ */
+fun TaskDto.toEntity(taskListId: String, cached: TaskEntity? = null): TaskEntity =
   TaskEntity(
     id = requireNotNull(id) { "Task response missing id" },
     taskListId = taskListId,
@@ -32,7 +39,9 @@ fun TaskDto.toEntity(taskListId: String, isStarred: Boolean = false): TaskEntity
     updated = updated?.toEpochMillisOrNull() ?: 0L,
     selfLink = selfLink,
     webViewLink = webViewLink,
-    isStarred = isStarred,
+    isStarred = cached?.isStarred ?: false,
+    localReminderTime = cached?.localReminderTime,
+    isReminderSet = cached?.isReminderSet ?: false,
   )
 
 fun TaskEntity.toDomain(): Task =
@@ -47,6 +56,7 @@ fun TaskEntity.toDomain(): Task =
     parentId = parent,
     position = position,
     isStarred = isStarred,
+    reminderTime = localReminderTime?.let { Instant.ofEpochMilli(it) },
   )
 
 fun TaskListDto.toEntity(): TaskListEntity =

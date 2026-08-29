@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import com.debzg.gotasks.ui.theme.AccentCoral
 import com.debzg.gotasks.ui.theme.TextPrimary
 import com.debzg.gotasks.ui.theme.TextSecondary
@@ -33,6 +34,7 @@ fun FlushTextField(
   singleLine: Boolean = false,
   imeAction: ImeAction = ImeAction.Default,
   onImeAction: (() -> Unit)? = null,
+  visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
   Box(modifier = Modifier.fillMaxWidth()) {
     BasicTextField(
@@ -43,6 +45,7 @@ fun FlushTextField(
       singleLine = singleLine,
       keyboardOptions = KeyboardOptions(imeAction = imeAction),
       keyboardActions = KeyboardActions(onDone = { onImeAction?.invoke() }, onGo = { onImeAction?.invoke() }, onSend = { onImeAction?.invoke() }),
+      visualTransformation = visualTransformation,
       modifier = modifier.fillMaxWidth(),
     )
     if (value.isEmpty()) {

@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.debzg.gotasks.R
 import com.debzg.gotasks.domain.model.Task
-import com.debzg.gotasks.presentation.common.formatDueDate
+import com.debzg.gotasks.presentation.common.formatDueLabel
 import com.debzg.gotasks.ui.theme.AccentCoral
 import com.debzg.gotasks.ui.theme.SurfaceElevatedHigh
 import com.debzg.gotasks.ui.theme.TextPrimary
@@ -52,7 +52,7 @@ fun TaskRow(task: Task, modifier: Modifier = Modifier, onToggleCompleted: () -> 
 
     task.due?.let { due ->
       Spacer(modifier = Modifier.width(8.dp))
-      Text(text = formatDueDate(due), style = MaterialTheme.typography.labelSmall, color = AccentCoral)
+      Text(text = formatDueLabel(due, task.reminderTime), style = MaterialTheme.typography.labelSmall, color = AccentCoral)
     }
   }
 }

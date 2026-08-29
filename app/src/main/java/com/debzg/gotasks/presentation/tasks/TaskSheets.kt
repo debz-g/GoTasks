@@ -46,19 +46,27 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.debzg.gotasks.R
 import com.debzg.gotasks.domain.model.Task
+import com.debzg.gotasks.datetime.DateTimeParser
+import com.debzg.gotasks.datetime.withoutParsedDate
+import com.debzg.gotasks.presentation.common.components.DateHighlightVisualTransformation
+import com.debzg.gotasks.presentation.common.components.DueDateChip
+import com.debzg.gotasks.presentation.common.components.datepicker.DueDatePickerSheet
 import com.debzg.gotasks.presentation.common.components.FlushTextField
 import com.debzg.gotasks.presentation.common.components.SheetEdgeIconButton
 import com.debzg.gotasks.presentation.common.components.SheetHorizontalPadding
 import com.debzg.gotasks.presentation.common.components.SheetSendButton
 import com.debzg.gotasks.presentation.common.components.SheetShape
 import com.debzg.gotasks.presentation.common.components.TaskCheckbox
-import com.debzg.gotasks.presentation.common.formatDueDate
+import com.debzg.gotasks.presentation.common.formatDueLabel
 import com.debzg.gotasks.ui.theme.AccentCoral
 import com.debzg.gotasks.ui.theme.SurfaceElevated
 import com.debzg.gotasks.ui.theme.SurfaceElevatedHigh
 import com.debzg.gotasks.ui.theme.TextPrimary
 import com.debzg.gotasks.ui.theme.TextSecondary
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 private val HeaderSlideSpec: FiniteAnimationSpec<Dp> = tween(durationMillis = 450)
 private val HeaderFadeSpec: FiniteAnimationSpec<Float> = tween(durationMillis = 380)
@@ -71,8 +79,9 @@ private val HeaderSlideDistance = 44.dp
 @Composable
 fun AddTaskSheet(
     listTitle: String,
-    onConfirm: (title: String, notes: String?, isStarred: Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onConfirm: (title: String, notes: String?, isStarred: Boolean, due: LocalDateTime?) -> Unit,
+    onDismiss: () -> Unit,
+    dateTimeParser: DateTimeParser = koinInject()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var title by remember { mutableStateOf("") }
@@ -80,6 +89,26 @@ fun AddTaskSheet(
     var showDetails by remember { mutableStateOf(false) }
     var isStarred by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+
+    // Re-parsed on every keystroke — a handful of regexes over a short string is cheap enough that
+    // debouncing would only add lag. Cleared by the chip's ×, and reinstated if the text changes.
+    var dateDetectionDismissed by remember { mutableStateOf(false) }
+    val parsed = remember(title, dateDetectionDismissed) { if (dateDetectionDismissed) null else dateTimeParser.parse(title) }
+
+    // A hand-picked date overrides whatever the parser found.
+    var manualDue by remember { mutableStateOf<LocalDateTime?>(null) }
+    var manualHasTime by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val effectiveDue = manualDue ?: parsed?.resolved
+    val effectiveHasTime = if (manualDue != null) manualHasTime else parsed?.hasTime == true
+
+    fun submit() {
+        if (title.isBlank()) return
+        // Strip the recognised phrase so "get groceries tomorrow" is saved as "get groceries".
+        val cleanTitle = parsed?.let { title.withoutParsedDate(it) }?.ifBlank { title } ?: title
+        onConfirm(cleanTitle, notes.ifBlank { null }, isStarred, effectiveDue)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -97,12 +126,17 @@ fun AddTaskSheet(
             Spacer(modifier = Modifier.height(16.dp))
             FlushTextField(
                 value = title,
-                onValueChange = { title = it },
+                onValueChange = {
+                    title = it
+                    dateDetectionDismissed = false
+                },
                 placeholder = "What would you like to do?",
                 textStyle = MaterialTheme.typography.bodyLarge,
                 singleLine = true,
                 imeAction = ImeAction.Done,
-                onImeAction = { if (title.isNotBlank()) onConfirm(title, notes.ifBlank { null }, isStarred) },
+                onImeAction = { submit() },
+                visualTransformation =
+                    DateHighlightVisualTransformation(ranges = parsed?.ranges.orEmpty(), color = AccentCoral),
                 modifier = Modifier.focusRequester(focusRequester),
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -112,6 +146,18 @@ fun AddTaskSheet(
                     onValueChange = { notes = it },
                     placeholder = "Add details",
                     textStyle = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            if (effectiveDue != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                DueDateChip(
+                    dateTime = effectiveDue,
+                    hasTime = effectiveHasTime,
+                    onClear = {
+                        dateDetectionDismissed = true
+                        manualDue = null
+                    },
                 )
             }
 
@@ -138,6 +184,13 @@ fun AddTaskSheet(
                     onClick = { isStarred = !isStarred },
                     iconSize = 24.dp
                 )
+                SheetEdgeIconButton(
+                    icon = R.drawable.ic_calendar,
+                    contentDescription = "Set due date",
+                    tint = if (effectiveDue != null) AccentCoral else TextSecondary,
+                    alignment = Alignment.CenterStart,
+                    onClick = { showDatePicker = true },
+                )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = listTitle,
@@ -145,17 +198,28 @@ fun AddTaskSheet(
                     color = TextSecondary
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                SheetSendButton(
-                    enabled = title.isNotBlank(),
-                    onClick = {
-                        if (title.isNotBlank()) onConfirm(
-                            title,
-                            notes.ifBlank { null },
-                            isStarred
-                        )
-                    })
+                SheetSendButton(enabled = title.isNotBlank(), onClick = { submit() })
             }
         }
+    }
+
+    if (showDatePicker) {
+        DueDatePickerSheet(
+            initial = effectiveDue,
+            initialHasTime = effectiveHasTime,
+            onConfirm = { selection ->
+                manualDue = selection.dateTime
+                manualHasTime = selection.hasTime
+                dateDetectionDismissed = true // a manual choice replaces the parsed one
+                showDatePicker = false
+            },
+            onClear = {
+                manualDue = null
+                dateDetectionDismissed = true
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false },
+        )
     }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -166,7 +230,7 @@ fun AddTaskSheet(
 fun EditTaskSheet(
     task: Task,
     listTitle: String,
-    onSave: (title: String, notes: String?, isStarred: Boolean) -> Unit,
+    onSave: (title: String, notes: String?, isStarred: Boolean, due: LocalDateTime?, hasTime: Boolean) -> Unit,
     onDelete: () -> Unit,
     onToggleCompleted: () -> Unit,
     onDismiss: () -> Unit,
@@ -180,9 +244,15 @@ fun EditTaskSheet(
     var notes by remember { mutableStateOf(task.notes.orEmpty()) }
     var isStarred by remember { mutableStateOf(task.isStarred) }
     var showOptions by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val zone = remember { ZoneId.systemDefault() }
+    var due by remember { mutableStateOf(task.due?.atZone(zone)?.toLocalDateTime()) }
+    // A stored reminder time is what distinguishes "due on this day" from "due at this moment".
+    var hasTime by remember { mutableStateOf(task.hasReminderTime) }
 
     fun saveAndDismiss() {
-        if (title.isNotBlank()) onSave(title, notes.ifBlank { null }, isStarred)
+        if (title.isNotBlank()) onSave(title, notes.ifBlank { null }, isStarred, due, hasTime)
         onDismiss()
     }
 
@@ -261,13 +331,13 @@ fun EditTaskSheet(
             ) {
                 TaskCheckbox(isCompleted = task.isCompleted, onToggle = onToggleCompleted)
                 Spacer(modifier = Modifier.width(12.dp))
-                task.due?.let { due ->
-                    Text(
-                        text = formatDueDate(due),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AccentCoral
-                    )
-                }
+                // Tapping the date (or the placeholder, when there isn't one) opens the picker.
+                Text(
+                    text = due?.let { formatDueLabel(it, hasTime) } ?: "Set due date",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (due != null) AccentCoral else TextSecondary,
+                    modifier = Modifier.clickable { showDatePicker = true }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -293,6 +363,24 @@ fun EditTaskSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+
+    if (showDatePicker) {
+        DueDatePickerSheet(
+            initial = due,
+            initialHasTime = hasTime,
+            onConfirm = { selection ->
+                due = selection.dateTime
+                hasTime = selection.hasTime
+                showDatePicker = false
+            },
+            onClear = {
+                due = null
+                hasTime = false
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false },
+        )
     }
 
     if (showOptions) {

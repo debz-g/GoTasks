@@ -19,8 +19,16 @@ class SyncScheduler(context: Context) {
   /**
    * Queues a sync after a local mutation.
    *
-   * REPLACE + a short initial delay debounces bursts of edits (typing, rapid checkbox taps) into a
-   * single run instead of one per keystroke.
+   * KEEP, deliberately not REPLACE: REPLACE *cancels a running worker*, and a push cancelled
+   * between "POST /tasks succeeded" and "outbox row deleted" leaves the CREATE queued even though
+   * the server already has the task — the next run then creates a duplicate. KEEP never interrupts
+   * an in-flight drain.
+   *
+   * Nothing is lost by not enqueuing: a pending run hasn't started yet and will pick the new op up,
+   * and a running drain re-queries the queue each iteration. [SyncWorker] re-schedules if anything
+   * is still queued when it finishes, covering the narrow window after its final query.
+   *
+   * The short delay still debounces bursts of edits into a single run.
    */
   fun schedulePush() {
     val request =
@@ -30,7 +38,7 @@ class SyncScheduler(context: Context) {
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
         .build()
 
-    workManager.enqueueUniqueWork(SyncWorker.UNIQUE_WORK_PUSH, ExistingWorkPolicy.REPLACE, request)
+    workManager.enqueueUniqueWork(SyncWorker.UNIQUE_WORK_PUSH, ExistingWorkPolicy.KEEP, request)
   }
 
   /**

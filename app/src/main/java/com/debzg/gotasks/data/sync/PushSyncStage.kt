@@ -16,6 +16,7 @@ import com.debzg.gotasks.data.mapper.toEntity
 import com.debzg.gotasks.data.remote.TasksApiService
 import com.debzg.gotasks.data.remote.dto.TaskDto
 import com.debzg.gotasks.data.remote.dto.TaskListDto
+import com.debzg.gotasks.data.remote.dto.TaskUpdateDto
 import java.io.IOException
 import kotlinx.serialization.json.Json
 import retrofit2.HttpException
@@ -106,7 +107,7 @@ class PushSyncStage(
         // A task created locally but not yet pushed has no server id to PATCH; its pending CREATE
         // carries the latest local state anyway, so this op is a no-op.
         if (op.localEntityId.isLocalId()) return
-        val updated = api.updateTask(taskListId = op.taskListId, taskId = op.localEntityId, body = decodeTask(op))
+        val updated = api.updateTask(taskListId = op.taskListId, taskId = op.localEntityId, body = decodeTaskUpdate(op))
         upsertServerTask(updated, op.taskListId)
       }
 
@@ -145,19 +146,20 @@ class PushSyncStage(
 
   private fun decodeTask(op: PendingOperationEntity): TaskDto = json.decodeFromString<TaskDto>(op.payloadJson)
 
+  private fun decodeTaskUpdate(op: PendingOperationEntity): TaskUpdateDto = json.decodeFromString<TaskUpdateDto>(op.payloadJson)
+
   private suspend fun upsertServerTask(dto: TaskDto, taskListId: String) {
-    val existingStar = dto.id?.let { taskDao.getById(it)?.isStarred } ?: false
-    taskDao.upsertAll(listOf(dto.toEntity(taskListId, isStarred = existingStar)))
+    taskDao.upsertAll(listOf(dto.toEntity(taskListId, cached = dto.id?.let { taskDao.getById(it) })))
   }
 
   /** Swaps the temporary local task id for the server's, keeping subtasks and queued ops pointed at it. */
   private suspend fun reconcileTaskId(tempId: String, serverTask: TaskDto, taskListId: String) {
     val serverId = requireNotNull(serverTask.id) { "Created task missing id" }
-    val isStarred = taskDao.getById(tempId)?.isStarred ?: false
+    val cached = taskDao.getById(tempId)
 
     database.withTransaction {
       taskDao.deleteById(tempId)
-      taskDao.upsertAll(listOf(serverTask.toEntity(taskListId, isStarred = isStarred)))
+      taskDao.upsertAll(listOf(serverTask.toEntity(taskListId, cached = cached)))
       taskDao.reparentChildren(oldId = tempId, newId = serverId)
       pendingOperationDao.remapEntityId(oldId = tempId, newId = serverId)
     }

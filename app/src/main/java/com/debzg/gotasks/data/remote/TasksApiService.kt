@@ -3,6 +3,7 @@ package com.debzg.gotasks.data.remote
 import com.debzg.gotasks.data.remote.dto.TaskDto
 import com.debzg.gotasks.data.remote.dto.TaskListDto
 import com.debzg.gotasks.data.remote.dto.TaskListsResponseDto
+import com.debzg.gotasks.data.remote.dto.TaskUpdateDto
 import com.debzg.gotasks.data.remote.dto.TasksResponseDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -45,7 +46,7 @@ interface TasksApiService {
   ): TaskDto
 
   @PATCH("lists/{taskListId}/tasks/{taskId}")
-  suspend fun updateTask(@Path("taskListId") taskListId: String, @Path("taskId") taskId: String, @Body body: TaskDto): TaskDto
+  suspend fun updateTask(@Path("taskListId") taskListId: String, @Path("taskId") taskId: String, @Body body: TaskUpdateDto): TaskDto
 
   @DELETE("lists/{taskListId}/tasks/{taskId}")
   suspend fun deleteTask(@Path("taskListId") taskListId: String, @Path("taskId") taskId: String)

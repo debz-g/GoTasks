@@ -116,11 +116,7 @@ class PullSyncStage(
       val entities =
         page.items
           .filter { it.id !in dirtyIds }
-          .map { dto ->
-            // isStarred is local-only, so carry the cached value across the refresh.
-            val existingIsStarred = dto.id?.let { taskDao.getById(it)?.isStarred } ?: false
-            dto.toEntity(taskListId, isStarred = existingIsStarred)
-          }
+          .map { dto -> dto.toEntity(taskListId, cached = dto.id?.let { taskDao.getById(it) }) }
       if (entities.isNotEmpty()) taskDao.upsertAll(entities)
 
       pageToken = page.nextPageToken

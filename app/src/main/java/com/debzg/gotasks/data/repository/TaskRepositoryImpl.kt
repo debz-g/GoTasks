@@ -10,9 +10,12 @@ import com.debzg.gotasks.data.mapper.LOCAL_ID_PREFIX
 import com.debzg.gotasks.data.mapper.toDomain
 import com.debzg.gotasks.data.mapper.toEntity
 import com.debzg.gotasks.data.remote.dto.TaskDto
+import com.debzg.gotasks.data.remote.dto.TaskUpdateDto
 import com.debzg.gotasks.domain.model.Task
 import com.debzg.gotasks.domain.repository.TaskRepository
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -23,7 +26,14 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
   override fun observeTasks(taskListId: String): Flow<List<Task>> =
     taskDao.observeTasksForList(taskListId).map { entities -> entities.map { it.toDomain() } }
 
-  override suspend fun createTask(taskListId: String, title: String, notes: String?, parentId: String?, isStarred: Boolean): String {
+  override suspend fun createTask(
+    taskListId: String,
+    title: String,
+    notes: String?,
+    parentId: String?,
+    isStarred: Boolean,
+    due: Instant?,
+  ): String {
     val id = LOCAL_ID_PREFIX + UUID.randomUUID()
     val now = System.currentTimeMillis()
     val entity =
@@ -33,7 +43,7 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
         title = title,
         notes = notes,
         status = "needsAction",
-        due = null,
+        due = due?.toEpochMilli(),
         completed = null,
         deleted = false,
         hidden = false,
@@ -44,6 +54,7 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
         selfLink = null,
         webViewLink = null,
         isStarred = isStarred,
+        localReminderTime = due?.toEpochMilli(),
         syncState = SyncState.PENDING_CREATE,
       )
     taskDao.upsertAll(listOf(entity))
@@ -52,22 +63,41 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
       OperationType.CREATE,
       localEntityId = id,
       taskListId = taskListId,
-      payload = TaskDto(title = title, notes = notes, parent = parentId),
+      payload = TaskDto(title = title, notes = notes, parent = parentId, due = due?.toGoogleDueDate()),
     )
     return id
   }
 
-  override suspend fun updateTask(taskId: String, title: String, notes: String?, isStarred: Boolean) {
+  override suspend fun updateTask(
+    taskId: String,
+    title: String,
+    notes: String?,
+    isStarred: Boolean,
+    due: Instant?,
+    hasTime: Boolean,
+  ) {
     val existing = taskDao.getById(taskId) ?: return
     taskDao.upsertAll(
-      listOf(existing.copy(title = title, notes = notes, isStarred = isStarred, updated = System.currentTimeMillis(), syncState = nextSyncState(existing)))
+      listOf(
+        existing.copy(
+          title = title,
+          notes = notes,
+          isStarred = isStarred,
+          due = due?.toEpochMilli(),
+          localReminderTime = if (hasTime) due?.toEpochMilli() else null,
+            updated = System.currentTimeMillis(),
+          syncState = nextSyncState(existing),
+        )
+      )
     )
     outboxRecorder.record(
       EntityType.TASK,
       OperationType.UPDATE,
       localEntityId = taskId,
       taskListId = existing.taskListId,
-      payload = TaskDto(title = title, notes = notes),
+      // The edit sheet shows the complete intended state, so due is always sent explicitly —
+      // JsonNull when cleared, which is the only way to actually unset it server-side.
+      payload = TaskUpdateDto(title = title, notes = notes, due = TaskUpdateDto.dueOf(due?.toGoogleDueDate())),
     )
   }
 
@@ -89,7 +119,7 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
       OperationType.UPDATE,
       localEntityId = taskId,
       taskListId = existing.taskListId,
-      payload = TaskDto(status = if (isCompleted) "completed" else "needsAction", completed = completedIso),
+      payload = TaskUpdateDto(status = if (isCompleted) "completed" else "needsAction", completed = completedIso),
     )
   }
 
@@ -114,3 +144,10 @@ private fun nextSyncState(existing: TaskEntity): SyncState =
   if (existing.syncState == SyncState.PENDING_CREATE) SyncState.PENDING_CREATE else SyncState.PENDING_UPDATE
 
 private fun localPosition(now: Long): String = now.toString().padStart(20, '0')
+
+/**
+ * The Tasks API's `due` field is date-only — it accepts RFC 3339 but ignores the time component,
+ * so it's normalised to UTC midnight. Any precise time the user gave lives in `localReminderTime`.
+ */
+private fun Instant.toGoogleDueDate(): String =
+  atZone(ZoneId.systemDefault()).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toString()

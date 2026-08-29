@@ -6,6 +6,8 @@ import com.debzg.gotasks.data.sync.SyncEngine
 import com.debzg.gotasks.data.sync.SyncOutcome
 import com.debzg.gotasks.domain.repository.TaskListRepository
 import com.debzg.gotasks.domain.repository.TaskRepository
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,8 +44,9 @@ class TasksViewModel(
       is TasksIntent.ShowRenameListDialog -> _state.update { it.copy(dialog = TasksDialog.RenameList) }
       is TasksIntent.ShowDeleteListConfirmDialog -> _state.update { it.copy(dialog = TasksDialog.DeleteListConfirm) }
       is TasksIntent.DismissDialog -> _state.update { it.copy(dialog = null) }
-      is TasksIntent.SubmitAddTask -> addTask(intent.title, intent.notes, intent.isStarred)
-      is TasksIntent.SubmitEditTask -> editTask(intent.taskId, intent.title, intent.notes, intent.isStarred)
+      is TasksIntent.SubmitAddTask -> addTask(intent.title, intent.notes, intent.isStarred, intent.due)
+      is TasksIntent.SubmitEditTask ->
+        editTask(intent.taskId, intent.title, intent.notes, intent.isStarred, intent.due, intent.hasTime)
       is TasksIntent.SubmitDeleteTask -> deleteTask(intent.taskId)
       is TasksIntent.SubmitNewList -> createList(intent.title)
       is TasksIntent.SubmitRenameList -> renameList(intent.title)
@@ -110,25 +113,45 @@ class TasksViewModel(
     _state.update { it.copy(isLoading = false, errorMessage = message) }
   }
 
-  private fun addTask(title: String, notes: String?, isStarred: Boolean) {
+  private fun addTask(title: String, notes: String?, isStarred: Boolean, due: LocalDateTime?) {
     val listId = _state.value.activeTaskListId
     if (listId == null || title.isBlank()) {
       _state.update { it.copy(dialog = null) }
       return
     }
     viewModelScope.launch {
-      taskRepository.createTask(taskListId = listId, title = title.trim(), notes = notes?.trim()?.ifBlank { null }, isStarred = isStarred)
+      taskRepository.createTask(
+        taskListId = listId,
+        title = title.trim(),
+        notes = notes?.trim()?.ifBlank { null },
+        isStarred = isStarred,
+        due = due?.atZone(ZoneId.systemDefault())?.toInstant(),
+      )
       _state.update { it.copy(dialog = null) }
     }
   }
 
-  private fun editTask(taskId: String, title: String, notes: String?, isStarred: Boolean) {
+  private fun editTask(
+    taskId: String,
+    title: String,
+    notes: String?,
+    isStarred: Boolean,
+    due: LocalDateTime?,
+    hasTime: Boolean,
+  ) {
     if (title.isBlank()) {
       _state.update { it.copy(dialog = null) }
       return
     }
     viewModelScope.launch {
-      taskRepository.updateTask(taskId = taskId, title = title.trim(), notes = notes?.trim()?.ifBlank { null }, isStarred = isStarred)
+      taskRepository.updateTask(
+        taskId = taskId,
+        title = title.trim(),
+        notes = notes?.trim()?.ifBlank { null },
+        isStarred = isStarred,
+        due = due?.atZone(ZoneId.systemDefault())?.toInstant(),
+        hasTime = hasTime,
+      )
       _state.update { it.copy(dialog = null) }
     }
   }

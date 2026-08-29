@@ -13,4 +13,9 @@ data class Task(
   val parentId: String?,
   val position: String,
   val isStarred: Boolean = false,
-)
+  /** Precise local time the user picked, when they gave one. The API's `due` is date-only. */
+  val reminderTime: Instant? = null,
+) {
+  val hasReminderTime: Boolean
+    get() = reminderTime != null
+}

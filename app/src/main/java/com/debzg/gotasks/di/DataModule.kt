@@ -7,6 +7,7 @@ import com.debzg.gotasks.data.auth.TasksAuthenticator
 import com.debzg.gotasks.data.local.AppDatabase
 import com.debzg.gotasks.data.local.OutboxRecorder
 import com.debzg.gotasks.data.remote.TasksApiService
+import com.debzg.gotasks.datetime.DateTimeParser
 import com.debzg.gotasks.data.repository.TaskListRepositoryImpl
 import com.debzg.gotasks.data.repository.TaskRepositoryImpl
 import com.debzg.gotasks.domain.repository.TaskListRepository
@@ -62,6 +63,7 @@ val dataModule = module {
   single { get<AppDatabase>().pendingOperationDao() }
   single { get<AppDatabase>().syncMetadataDao() }
   single { OutboxRecorder(get(), get(), get()) }
+  single { DateTimeParser() }
 
   single<TaskListRepository> { TaskListRepositoryImpl(get(), get(), get()) }
   single<TaskRepository> { TaskRepositoryImpl(get(), get()) }

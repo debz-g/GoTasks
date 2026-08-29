@@ -85,7 +85,7 @@ fun TasksScreen(modifier: Modifier = Modifier, viewModel: TasksViewModel = koinV
     is TasksDialog.AddTask ->
       AddTaskSheet(
         listTitle = state.listTitle,
-        onConfirm = { title, notes, isStarred -> viewModel.onIntent(TasksIntent.SubmitAddTask(title, notes, isStarred)) },
+        onConfirm = { title, notes, isStarred, due -> viewModel.onIntent(TasksIntent.SubmitAddTask(title, notes, isStarred, due)) },
         onDismiss = { viewModel.onIntent(TasksIntent.DismissDialog) },
       )
 
@@ -93,7 +93,9 @@ fun TasksScreen(modifier: Modifier = Modifier, viewModel: TasksViewModel = koinV
       EditTaskSheet(
         task = dialog.task,
         listTitle = state.listTitle,
-        onSave = { title, notes, isStarred -> viewModel.onIntent(TasksIntent.SubmitEditTask(dialog.task.id, title, notes, isStarred)) },
+        onSave = { title, notes, isStarred, due, hasTime ->
+          viewModel.onIntent(TasksIntent.SubmitEditTask(dialog.task.id, title, notes, isStarred, due, hasTime))
+        },
         onDelete = { viewModel.onIntent(TasksIntent.SubmitDeleteTask(dialog.task.id)) },
         onToggleCompleted = { viewModel.onIntent(TasksIntent.ToggleTaskCompleted(dialog.task)) },
         onDismiss = { viewModel.onIntent(TasksIntent.DismissDialog) },
