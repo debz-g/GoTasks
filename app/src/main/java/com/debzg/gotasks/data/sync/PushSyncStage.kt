@@ -23,17 +23,6 @@ import retrofit2.HttpException
 /** How many times a single op may fail with a non-retryable error before it's dropped. */
 private const val MAX_RETRIES = 3
 
-enum class PushOutcome {
-  /** Queue fully drained (or nothing to do). */
-  Success,
-
-  /** Network unavailable / server erroring — leave the queue and let a later run retry. */
-  Retry,
-
-  /** Consent missing or revoked; syncing is paused until the user re-authorizes. */
-  AuthRequired,
-}
-
 /**
  * Drains the outbox against the real Tasks API, oldest op first and strictly one at a time.
  *
@@ -50,12 +39,12 @@ class PushSyncStage(
   private val authStateRepository: AuthStateRepository,
 ) {
 
-  suspend fun push(): PushOutcome {
+  suspend fun push(): SyncOutcome {
     val skippedOpIds = mutableListOf<Long>()
 
     while (true) {
       // Re-read each iteration so id remapping from earlier ops in this same drain is picked up.
-      val op = pendingOperationDao.getNextPending(skippedOpIds.ifEmpty { listOf(-1L) }) ?: return PushOutcome.Success
+      val op = pendingOperationDao.getNextPending(skippedOpIds.ifEmpty { listOf(-1L) }) ?: return SyncOutcome.Success
 
       try {
         when (op.entityType) {
@@ -69,7 +58,7 @@ class PushSyncStage(
             // The OkHttp authenticator already tried a silent refresh and gave up.
             Log.w(TAG, "Authorization required while pushing op ${op.opId}", e)
             authStateRepository.update(AuthState.NeedsReauthorization)
-            return PushOutcome.AuthRequired
+            return SyncOutcome.AuthRequired
           }
           e.code() == 404 && op.operationType == OperationType.DELETE -> {
             // Already gone server-side — the desired end state, so treat as success.
@@ -82,14 +71,14 @@ class PushSyncStage(
           else -> {
             Log.w(TAG, "Server error on op ${op.opId} (HTTP ${e.code()}); will retry later", e)
             failOp(op, skippedOpIds, "HTTP ${e.code()}")
-            return PushOutcome.Retry
+            return SyncOutcome.Retry
           }
         }
       } catch (e: IOException) {
         // Network is down — no point walking the rest of the queue this run.
         Log.w(TAG, "Network error pushing op ${op.opId}; will retry later", e)
         failOp(op, skippedOpIds, e.message)
-        return PushOutcome.Retry
+        return SyncOutcome.Retry
       }
     }
   }

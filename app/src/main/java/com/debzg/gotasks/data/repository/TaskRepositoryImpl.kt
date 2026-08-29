@@ -1,7 +1,6 @@
 package com.debzg.gotasks.data.repository
 
 import com.debzg.gotasks.data.local.OutboxRecorder
-import com.debzg.gotasks.data.local.dao.PendingOperationDao
 import com.debzg.gotasks.data.local.dao.TaskDao
 import com.debzg.gotasks.data.local.entity.EntityType
 import com.debzg.gotasks.data.local.entity.OperationType
@@ -10,7 +9,6 @@ import com.debzg.gotasks.data.local.entity.TaskEntity
 import com.debzg.gotasks.data.mapper.LOCAL_ID_PREFIX
 import com.debzg.gotasks.data.mapper.toDomain
 import com.debzg.gotasks.data.mapper.toEntity
-import com.debzg.gotasks.data.remote.TasksApiService
 import com.debzg.gotasks.data.remote.dto.TaskDto
 import com.debzg.gotasks.domain.model.Task
 import com.debzg.gotasks.domain.repository.TaskRepository
@@ -19,30 +17,11 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class TaskRepositoryImpl(
-  private val taskDao: TaskDao,
-  private val tasksApiService: TasksApiService,
-  private val outboxRecorder: OutboxRecorder,
-  private val pendingOperationDao: PendingOperationDao,
-) : TaskRepository {
+/** Purely local: reads and optimistic writes against Room, with every mutation queued in the outbox. */
+class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorder: OutboxRecorder) : TaskRepository {
 
   override fun observeTasks(taskListId: String): Flow<List<Task>> =
     taskDao.observeTasksForList(taskListId).map { entities -> entities.map { it.toDomain() } }
-
-  override suspend fun refreshTasks(taskListId: String) {
-    val response = tasksApiService.getTasks(taskListId)
-    // Skip-if-dirty: never let a pull clobber a local edit that hasn't been pushed yet.
-    val dirtyIds = pendingOperationDao.getAllPendingEntityIds().toSet()
-    val entities =
-      response.items
-        .filter { it.id !in dirtyIds }
-        .map { dto ->
-          // isStarred is local-only (no Tasks API equivalent) — preserve whatever is cached.
-          val existingIsStarred = dto.id?.let { taskDao.getById(it)?.isStarred } ?: false
-          dto.toEntity(taskListId, isStarred = existingIsStarred)
-        }
-    taskDao.upsertAll(entities)
-  }
 
   override suspend fun createTask(taskListId: String, title: String, notes: String?, parentId: String?, isStarred: Boolean): String {
     val id = LOCAL_ID_PREFIX + UUID.randomUUID()

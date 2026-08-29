@@ -60,8 +60,9 @@ val dataModule = module {
   single { get<AppDatabase>().taskListDao() }
   single { get<AppDatabase>().taskDao() }
   single { get<AppDatabase>().pendingOperationDao() }
+  single { get<AppDatabase>().syncMetadataDao() }
   single { OutboxRecorder(get(), get(), get()) }
 
-  single<TaskListRepository> { TaskListRepositoryImpl(get(), get(), get(), get()) }
-  single<TaskRepository> { TaskRepositoryImpl(get(), get(), get(), get()) }
+  single<TaskListRepository> { TaskListRepositoryImpl(get(), get(), get()) }
+  single<TaskRepository> { TaskRepositoryImpl(get(), get()) }
 }

@@ -18,11 +18,11 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
   private val syncEngine: SyncEngine by inject()
 
   override suspend fun doWork(): Result =
-    when (val outcome = syncEngine.sync()) {
-      PushOutcome.Success -> Result.success()
-      PushOutcome.Retry -> Result.retry()
+    when (syncEngine.sync()) {
+      SyncOutcome.Success -> Result.success()
+      SyncOutcome.Retry -> Result.retry()
       // Needs user interaction — retrying on a backoff would just burn battery until they act.
-      PushOutcome.AuthRequired -> {
+      SyncOutcome.AuthRequired -> {
         Log.w(TAG, "Sync paused: re-authorization required")
         Result.success()
       }
@@ -31,5 +31,7 @@ class SyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
   companion object {
     private const val TAG = "SyncWorker"
     const val UNIQUE_WORK_PUSH = "sync-push"
+    const val UNIQUE_WORK_FOREGROUND = "sync-foreground"
+    const val UNIQUE_WORK_PERIODIC = "sync-periodic"
   }
 }

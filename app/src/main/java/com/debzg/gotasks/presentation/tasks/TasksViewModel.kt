@@ -2,6 +2,8 @@ package com.debzg.gotasks.presentation.tasks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.debzg.gotasks.data.sync.SyncEngine
+import com.debzg.gotasks.data.sync.SyncOutcome
 import com.debzg.gotasks.domain.repository.TaskListRepository
 import com.debzg.gotasks.domain.repository.TaskRepository
 import kotlinx.coroutines.Job
@@ -11,7 +13,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class TasksViewModel(private val taskListRepository: TaskListRepository, private val taskRepository: TaskRepository) : ViewModel() {
+class TasksViewModel(
+  private val taskListRepository: TaskListRepository,
+  private val taskRepository: TaskRepository,
+  private val syncEngine: SyncEngine,
+) : ViewModel() {
 
   private val _state = MutableStateFlow(TasksState())
   val state: StateFlow<TasksState> = _state.asStateFlow()
@@ -20,21 +26,15 @@ class TasksViewModel(private val taskListRepository: TaskListRepository, private
 
   init {
     observeTaskLists()
-    viewModelScope.launch {
-      try {
-        taskListRepository.refreshTaskLists()
-      } catch (e: Exception) {
-        _state.update { it.copy(errorMessage = e.message ?: "Couldn't load lists") }
-      }
-    }
+    viewModelScope.launch { runSync() }
   }
 
   fun onIntent(intent: TasksIntent) {
     when (intent) {
-      is TasksIntent.Refresh -> viewModelScope.launch { refresh() }
+      is TasksIntent.Refresh -> viewModelScope.launch { runSync() }
       is TasksIntent.ToggleCompletedSection -> _state.update { it.copy(isCompletedSectionExpanded = !it.isCompletedSectionExpanded) }
       is TasksIntent.ToggleListSwitcher -> _state.update { it.copy(isListSwitcherExpanded = !it.isListSwitcherExpanded) }
-      is TasksIntent.SelectTaskList -> selectTaskList(intent.taskListId, pull = true)
+      is TasksIntent.SelectTaskList -> selectTaskList(intent.taskListId)
       is TasksIntent.ToggleTaskCompleted -> viewModelScope.launch { taskRepository.setCompleted(intent.task.id, !intent.task.isCompleted) }
       is TasksIntent.ShowAddTaskDialog -> _state.update { it.copy(dialog = TasksDialog.AddTask) }
       is TasksIntent.ShowEditTaskDialog -> _state.update { it.copy(dialog = TasksDialog.EditTask(intent.task)) }
@@ -58,16 +58,17 @@ class TasksViewModel(private val taskListRepository: TaskListRepository, private
         _state.update { it.copy(taskLists = lists) }
 
         when {
-          previousActiveId == null && lists.isNotEmpty() -> selectTaskList(lists.first().id, pull = true)
+          previousActiveId == null && lists.isNotEmpty() -> selectTaskList(lists.first().id)
           previousActiveId != null && lists.none { it.id == previousActiveId } ->
-            lists.firstOrNull()?.let { selectTaskList(it.id, pull = false) } ?: _state.update { it.copy(isLoading = false) }
+            lists.firstOrNull()?.let { selectTaskList(it.id) } ?: _state.update { it.copy(isLoading = false) }
           else -> lists.find { it.id == previousActiveId }?.let { active -> _state.update { it.copy(listTitle = active.title) } }
         }
       }
     }
   }
 
-  private fun selectTaskList(taskListId: String, pull: Boolean) {
+  /** Switches the visible list. No network call — the sync engine keeps every list's tasks cached. */
+  private fun selectTaskList(taskListId: String) {
     tasksObservationJob?.cancel()
     val title = _state.value.taskLists.find { it.id == taskListId }?.title.orEmpty()
     _state.update {
@@ -92,29 +93,21 @@ class TasksViewModel(private val taskListRepository: TaskListRepository, private
         }
       }
 
-    if (pull) {
-      viewModelScope.launch {
-        _state.update { it.copy(isLoading = true, errorMessage = null) }
-        try {
-          taskRepository.refreshTasks(taskListId)
-        } catch (e: Exception) {
-          _state.update { it.copy(errorMessage = e.message ?: "Failed to load tasks") }
-        }
-        _state.update { it.copy(isLoading = false) }
-      }
-    }
   }
 
-  private suspend fun refresh() {
-    val taskListId = _state.value.activeTaskListId ?: return
+  /**
+   * Runs a full push-then-pull pass. The UI reads from Room, so results land via the observation
+   * flows rather than being returned here.
+   */
+  private suspend fun runSync() {
     _state.update { it.copy(isLoading = true, errorMessage = null) }
-    try {
-      taskListRepository.refreshTaskLists()
-      taskRepository.refreshTasks(taskListId)
-    } catch (e: Exception) {
-      _state.update { it.copy(errorMessage = e.message ?: "Refresh failed") }
-    }
-    _state.update { it.copy(isLoading = false) }
+    val message =
+      when (syncEngine.sync()) {
+        SyncOutcome.Success -> null
+        SyncOutcome.Retry -> "Couldn't reach Google Tasks. Showing offline data."
+        SyncOutcome.AuthRequired -> "Sign-in expired. Please reconnect your Google account."
+      }
+    _state.update { it.copy(isLoading = false, errorMessage = message) }
   }
 
   private fun addTask(title: String, notes: String?, isStarred: Boolean) {
@@ -155,7 +148,7 @@ class TasksViewModel(private val taskListRepository: TaskListRepository, private
     viewModelScope.launch {
       val newId = taskListRepository.createTaskList(title.trim())
       _state.update { it.copy(dialog = null) }
-      selectTaskList(newId, pull = false)
+      selectTaskList(newId)
     }
   }
 

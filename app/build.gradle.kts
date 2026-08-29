@@ -114,4 +114,5 @@ dependencies {
 
   // Background sync
   implementation(libs.androidx.work.runtime.ktx)
+  implementation(libs.androidx.lifecycle.process)
 }

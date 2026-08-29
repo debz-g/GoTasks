@@ -6,8 +6,6 @@ import kotlinx.coroutines.flow.Flow
 interface TaskListRepository {
   fun observeTaskLists(): Flow<List<TaskList>>
 
-  suspend fun refreshTaskLists()
-
   suspend fun createTaskList(title: String): String
 
   suspend fun renameTaskList(taskListId: String, title: String)

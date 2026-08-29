@@ -10,7 +10,6 @@ import com.debzg.gotasks.data.mapper.LOCAL_ID_PREFIX
 import com.debzg.gotasks.data.mapper.isLocalId
 import com.debzg.gotasks.data.mapper.toDomain
 import com.debzg.gotasks.data.mapper.toEntity
-import com.debzg.gotasks.data.remote.TasksApiService
 import com.debzg.gotasks.data.remote.dto.TaskListDto
 import com.debzg.gotasks.domain.model.TaskList
 import com.debzg.gotasks.domain.repository.TaskListRepository
@@ -18,20 +17,14 @@ import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+/** Purely local: reads and optimistic writes against Room, with every mutation queued in the outbox. */
 class TaskListRepositoryImpl(
   private val taskListDao: TaskListDao,
-  private val tasksApiService: TasksApiService,
   private val outboxRecorder: OutboxRecorder,
   private val pendingOperationDao: PendingOperationDao,
 ) : TaskListRepository {
 
   override fun observeTaskLists(): Flow<List<TaskList>> = taskListDao.observeAll().map { entities -> entities.map { it.toDomain() } }
-
-  override suspend fun refreshTaskLists() {
-    val response = tasksApiService.getTaskLists()
-    val dirtyIds = pendingOperationDao.getAllPendingEntityIds().toSet()
-    taskListDao.upsertAll(response.items.filter { it.id !in dirtyIds }.map { it.toEntity() })
-  }
 
   override suspend fun createTaskList(title: String): String {
     val id = LOCAL_ID_PREFIX + UUID.randomUUID()
