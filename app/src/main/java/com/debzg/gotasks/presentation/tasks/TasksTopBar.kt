@@ -1,5 +1,6 @@
 package com.debzg.gotasks.presentation.tasks
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,6 +10,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.debzg.gotasks.R
-import com.debzg.gotasks.presentation.common.components.ListSwitcherDropdown
 import com.debzg.gotasks.ui.theme.TextPrimary
 
 @Composable
@@ -28,14 +29,16 @@ fun TasksTopBar(state: TasksState, onIntent: (TasksIntent) -> Unit, modifier: Mo
   var showOverflowMenu by remember { mutableStateOf(false) }
 
   Row(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-    Box(modifier = Modifier.weight(1f)) {
-      ListSwitcherDropdown(
-        title = state.listTitle.ifBlank { "GoTasks" },
-        isExpanded = state.isListSwitcherExpanded,
-        taskLists = state.taskLists,
-        onToggle = { onIntent(TasksIntent.ToggleListSwitcher) },
-        onSelect = { onIntent(TasksIntent.SelectTaskList(it)) },
-        onNewList = { onIntent(TasksIntent.ShowNewListDialog) },
+    Row(
+      modifier = Modifier.weight(1f).clickable { onIntent(TasksIntent.ShowListPicker) },
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(text = state.listTitle.ifBlank { "GoTasks" }, style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+      Icon(
+        painter = painterResource(R.drawable.ic_chevron_down),
+        contentDescription = "Switch list",
+        tint = TextPrimary,
+        modifier = Modifier.size(20.dp),
       )
     }
 

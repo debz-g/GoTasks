@@ -20,8 +20,9 @@ import com.debzg.gotasks.presentation.common.components.CircularFab
 import com.debzg.gotasks.presentation.common.components.CompletedSection
 import com.debzg.gotasks.presentation.common.components.TaskRow
 import com.debzg.gotasks.presentation.listmanagement.DeleteListConfirmDialog
-import com.debzg.gotasks.presentation.listmanagement.NewListDialog
-import com.debzg.gotasks.presentation.listmanagement.RenameListDialog
+import com.debzg.gotasks.presentation.listmanagement.ListPickerSheet
+import com.debzg.gotasks.presentation.listmanagement.NewListSheet
+import com.debzg.gotasks.presentation.listmanagement.RenameListSheet
 import com.debzg.gotasks.ui.theme.AccentCoral
 import com.debzg.gotasks.ui.theme.TextSecondary
 import org.koin.androidx.compose.koinViewModel
@@ -98,11 +99,20 @@ fun TasksScreen(modifier: Modifier = Modifier, viewModel: TasksViewModel = koinV
         onDismiss = { viewModel.onIntent(TasksIntent.DismissDialog) },
       )
 
+    is TasksDialog.ListPicker ->
+      ListPickerSheet(
+        taskLists = state.taskLists,
+        activeTaskListId = state.activeTaskListId,
+        onSelect = { viewModel.onIntent(TasksIntent.SelectTaskList(it)) },
+        onCreateNewList = { viewModel.onIntent(TasksIntent.ShowNewListDialog) },
+        onDismiss = { viewModel.onIntent(TasksIntent.DismissDialog) },
+      )
+
     is TasksDialog.NewList ->
-      NewListDialog(onConfirm = { viewModel.onIntent(TasksIntent.SubmitNewList(it)) }, onDismiss = { viewModel.onIntent(TasksIntent.DismissDialog) })
+      NewListSheet(onConfirm = { viewModel.onIntent(TasksIntent.SubmitNewList(it)) }, onDismiss = { viewModel.onIntent(TasksIntent.DismissDialog) })
 
     is TasksDialog.RenameList ->
-      RenameListDialog(
+      RenameListSheet(
         currentTitle = state.listTitle,
         onConfirm = { viewModel.onIntent(TasksIntent.SubmitRenameList(it)) },
         onDismiss = { viewModel.onIntent(TasksIntent.DismissDialog) },

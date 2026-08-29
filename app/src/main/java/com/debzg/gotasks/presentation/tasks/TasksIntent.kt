@@ -7,7 +7,7 @@ sealed interface TasksIntent {
 
   data object ToggleCompletedSection : TasksIntent
 
-  data object ToggleListSwitcher : TasksIntent
+  data object ShowListPicker : TasksIntent
 
   data class SelectTaskList(val taskListId: String) : TasksIntent
 

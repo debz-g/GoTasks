@@ -41,11 +41,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.debzg.gotasks.R
 import com.debzg.gotasks.domain.model.Task
 import com.debzg.gotasks.presentation.common.components.FlushTextField
+import com.debzg.gotasks.presentation.common.components.SheetEdgeIconButton
+import com.debzg.gotasks.presentation.common.components.SheetHorizontalPadding
+import com.debzg.gotasks.presentation.common.components.SheetSendButton
+import com.debzg.gotasks.presentation.common.components.SheetShape
 import com.debzg.gotasks.presentation.common.components.TaskCheckbox
 import com.debzg.gotasks.presentation.common.formatDueDate
 import com.debzg.gotasks.ui.theme.AccentCoral
@@ -55,18 +60,12 @@ import com.debzg.gotasks.ui.theme.TextPrimary
 import com.debzg.gotasks.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 
-private val SheetShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
 private val HeaderSlideSpec: FiniteAnimationSpec<Dp> = tween(durationMillis = 450)
 private val HeaderFadeSpec: FiniteAnimationSpec<Float> = tween(durationMillis = 380)
 
 // Back-arrow box (36dp) plus a small gap — how far the list name shifts right to make room for it.
 private val HeaderSlideDistance = 44.dp
 
-// Uniform 16dp start/end margin for every element in the sheet — text, checkbox, and icons alike.
-// TextField and IconButton both carry their own internal padding/touch-target inflation, so both
-// are overridden below (zero content padding on TextField, flush-aligned edge icons) rather than
-// just relying on this column padding, or their visible content would sit deeper than 16dp.
-private val SheetHorizontalPadding = 16.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +100,9 @@ fun AddTaskSheet(
                 onValueChange = { title = it },
                 placeholder = "What would you like to do?",
                 textStyle = MaterialTheme.typography.bodyLarge,
+                singleLine = true,
+                imeAction = ImeAction.Done,
+                onImeAction = { if (title.isNotBlank()) onConfirm(title, notes.ifBlank { null }, isStarred) },
                 modifier = Modifier.focusRequester(focusRequester),
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -121,14 +123,14 @@ fun AddTaskSheet(
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
             ) {
-                EdgeIconButton(
+                SheetEdgeIconButton(
                     icon = R.drawable.ic_details,
                     contentDescription = "Add details",
                     tint = if (showDetails) AccentCoral else TextSecondary,
                     alignment = Alignment.CenterStart,
                     onClick = { showDetails = !showDetails },
                 )
-                EdgeIconButton(
+                SheetEdgeIconButton(
                     icon = if (isStarred) R.drawable.ic_star_filled else R.drawable.ic_star_outline,
                     contentDescription = "Star",
                     tint = if (isStarred) AccentCoral else TextSecondary,
@@ -143,7 +145,7 @@ fun AddTaskSheet(
                     color = TextSecondary
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                SendButton(
+                SheetSendButton(
                     enabled = title.isNotBlank(),
                     onClick = {
                         if (title.isNotBlank()) onConfirm(
@@ -222,7 +224,7 @@ fun EditTaskSheet(
                 )
 
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    EdgeIconButton(
+                    SheetEdgeIconButton(
                         icon = R.drawable.ic_arrow_back,
                         contentDescription = "Collapse",
                         tint = TextPrimary,
@@ -240,7 +242,7 @@ fun EditTaskSheet(
                         modifier = Modifier.offset(x = nameOffset),
                     )
                 }
-                EdgeIconButton(
+                SheetEdgeIconButton(
                     icon = R.drawable.ic_more_vert,
                     contentDescription = "More",
                     tint = TextPrimary,
@@ -274,7 +276,10 @@ fun EditTaskSheet(
                 value = title,
                 onValueChange = { title = it },
                 placeholder = "Title",
-                textStyle = MaterialTheme.typography.bodyLarge
+                textStyle = MaterialTheme.typography.bodyLarge,
+                singleLine = true,
+                imeAction = ImeAction.Done,
+                onImeAction = { saveAndDismiss() }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -370,58 +375,5 @@ private fun OptionRow(icon: Int, label: String, onClick: () -> Unit, tint: Color
         )
         Spacer(modifier = Modifier.width(16.dp))
         Text(text = label, style = MaterialTheme.typography.bodyLarge, color = tint)
-    }
-}
-
-/**
- * An icon button whose glyph sits flush against the [alignment] edge of its own box — plain
- * `IconButton` centers its icon inside a 48dp minimum touch target, which pushes the visible
- * glyph away from the true edge of whatever it's aligned within. This keeps a comfortable tap
- * target (36dp) while keeping the icon itself flush at the row's start/end margin.
- */
-@Composable
-private fun EdgeIconButton(
-    icon: Int,
-    contentDescription: String?,
-    tint: Color,
-    onClick: () -> Unit,
-    alignment: Alignment,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    boxSize: Dp = 36.dp,
-    iconSize: Dp = 20.dp,
-) {
-    Box(
-        modifier = modifier
-            .size(boxSize)
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = alignment
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(iconSize)
-        )
-    }
-}
-
-@Composable
-private fun SendButton(enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier =
-            Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(if (enabled) AccentCoral else SurfaceElevatedHigh)
-                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_send),
-            contentDescription = "Save",
-            tint = if (enabled) Color.White else TextSecondary,
-            modifier = Modifier.size(18.dp),
-        )
     }
 }

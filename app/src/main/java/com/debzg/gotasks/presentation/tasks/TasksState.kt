@@ -8,6 +8,8 @@ sealed interface TasksDialog {
 
   data class EditTask(val task: Task) : TasksDialog
 
+  data object ListPicker : TasksDialog
+
   data object NewList : TasksDialog
 
   data object RenameList : TasksDialog
@@ -23,7 +25,6 @@ data class TasksState(
   val activeTasks: List<Task> = emptyList(),
   val completedTasks: List<Task> = emptyList(),
   val isCompletedSectionExpanded: Boolean = false,
-  val isListSwitcherExpanded: Boolean = false,
   val dialog: TasksDialog? = null,
   val errorMessage: String? = null,
 )

@@ -33,12 +33,12 @@ class TasksViewModel(
     when (intent) {
       is TasksIntent.Refresh -> viewModelScope.launch { runSync() }
       is TasksIntent.ToggleCompletedSection -> _state.update { it.copy(isCompletedSectionExpanded = !it.isCompletedSectionExpanded) }
-      is TasksIntent.ToggleListSwitcher -> _state.update { it.copy(isListSwitcherExpanded = !it.isListSwitcherExpanded) }
+      is TasksIntent.ShowListPicker -> _state.update { it.copy(dialog = TasksDialog.ListPicker) }
       is TasksIntent.SelectTaskList -> selectTaskList(intent.taskListId)
       is TasksIntent.ToggleTaskCompleted -> viewModelScope.launch { taskRepository.setCompleted(intent.task.id, !intent.task.isCompleted) }
       is TasksIntent.ShowAddTaskDialog -> _state.update { it.copy(dialog = TasksDialog.AddTask) }
       is TasksIntent.ShowEditTaskDialog -> _state.update { it.copy(dialog = TasksDialog.EditTask(intent.task)) }
-      is TasksIntent.ShowNewListDialog -> _state.update { it.copy(dialog = TasksDialog.NewList, isListSwitcherExpanded = false) }
+      is TasksIntent.ShowNewListDialog -> _state.update { it.copy(dialog = TasksDialog.NewList) }
       is TasksIntent.ShowRenameListDialog -> _state.update { it.copy(dialog = TasksDialog.RenameList) }
       is TasksIntent.ShowDeleteListConfirmDialog -> _state.update { it.copy(dialog = TasksDialog.DeleteListConfirm) }
       is TasksIntent.DismissDialog -> _state.update { it.copy(dialog = null) }
@@ -75,9 +75,9 @@ class TasksViewModel(
       it.copy(
         activeTaskListId = taskListId,
         listTitle = title,
-        isListSwitcherExpanded = false,
         activeTasks = emptyList(),
         completedTasks = emptyList(),
+        dialog = null, // close the picker sheet when a list is chosen
       )
     }
 
