@@ -98,12 +98,11 @@ class PushSyncStage(
     when (op.operationType) {
       OperationType.CREATE -> {
         val payload = decodeTask(op)
-        val created = api.createTask(taskListId = op.taskListId, body = payload.copy(id = null), parent = payload.parent)
+        val created = api.createTask(taskListId = op.taskListId, body = payload.copy(id = null))
         reconcileTaskId(tempId = op.localEntityId, serverTask = created, taskListId = op.taskListId)
       }
 
-      OperationType.UPDATE,
-      OperationType.MOVE -> {
+      OperationType.UPDATE -> {
         // A task created locally but not yet pushed has no server id to PATCH; its pending CREATE
         // carries the latest local state anyway, so this op is a no-op.
         if (op.localEntityId.isLocalId()) return
@@ -139,8 +138,6 @@ class PushSyncStage(
         api.deleteTaskList(taskListId = op.localEntityId)
         taskListDao.deleteById(op.localEntityId)
       }
-
-      OperationType.MOVE -> Unit // Lists have no ordering in the Tasks API.
     }
   }
 

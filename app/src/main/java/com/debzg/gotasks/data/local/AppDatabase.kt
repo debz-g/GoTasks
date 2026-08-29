@@ -13,7 +13,7 @@ import com.debzg.gotasks.data.local.entity.TaskListEntity
 
 @Database(
   entities = [TaskListEntity::class, TaskEntity::class, PendingOperationEntity::class, SyncMetadataEntity::class],
-  version = 7,
+  version = 9,
   exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.debzg.gotasks.data.sync.SyncEngine
 import com.debzg.gotasks.data.sync.SyncOutcome
+import com.debzg.gotasks.domain.model.Task
 import com.debzg.gotasks.domain.repository.TaskListRepository
 import com.debzg.gotasks.domain.repository.TaskRepository
 import java.time.LocalDateTime
@@ -89,7 +90,7 @@ class TasksViewModel(
         taskRepository.observeTasks(taskListId).collect { tasks ->
           _state.update {
             it.copy(
-              activeTasks = tasks.filter { task -> !task.isCompleted }.sortedBy { task -> task.position },
+              activeTasks = orderWithSubtasks(tasks.filter { task -> !task.isCompleted }),
               completedTasks = tasks.filter { task -> task.isCompleted }.sortedByDescending { task -> task.completedAt },
             )
           }
@@ -194,4 +195,20 @@ class TasksViewModel(
       _state.update { it.copy(dialog = null, activeTaskListId = null) }
     }
   }
+}
+
+/**
+ * Flattens tasks so each parent is immediately followed by its own subtasks.
+ *
+ * Sorting the whole list by `position` alone won't do it: subtask positions are scoped to their
+ * parent, so a subtask can otherwise sort far away from the task it belongs to. Tasks whose parent
+ * isn't present (completed, or not yet pulled) are treated as top level so they can't vanish.
+ */
+internal fun orderWithSubtasks(tasks: List<Task>): List<Task> {
+  val presentIds = tasks.mapTo(mutableSetOf()) { it.id }
+  val childrenByParent = tasks.filter { it.parentId in presentIds }.groupBy { it.parentId }
+  return tasks
+    .filter { it.parentId == null || it.parentId !in presentIds }
+    .sortedBy { it.position }
+    .flatMap { parent -> listOf(parent) + childrenByParent[parent.id].orEmpty().sortedBy { it.position } }
 }

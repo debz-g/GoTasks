@@ -24,16 +24,30 @@ minimal bottom sheets.
 
 - **Real Google Tasks sync** — no separate account, no separate data store
 - **Multiple lists** with in-app create / rename / delete
-- **Subtasks** (one level, matching the Tasks API)
+- **Natural-language due dates** — typing "get groceries tomorrow at 5pm" sets the date, highlights
+  the phrase as you type, and strips it from the saved title
+- **Custom date picker** modelled on TickTick, for setting dates by hand
 - **Offline-first** — Room is the source of truth; local edits queue in an outbox and push when
-  connectivity returns
+  connectivity returns, with incremental pulls on foreground and a 15-minute timer
 - **Silent re-authorization** on launch, so you don't sign in every cold start
 - **True-black theme** with Poppins, tuned for OLED
 
+Existing subtasks sync down from Google and render nested, but GoTasks doesn't create or re-parent
+them.
+
 ### Not built yet
 
-Pull sync on a timer, natural-language due dates ("tomorrow", "next Friday"), reminders, and the
-home-screen widget. See [Roadmap](#roadmap).
+Reminder notifications and the home-screen widget. See [Roadmap](#roadmap).
+
+### Google Tasks API limits worth knowing
+
+Some things simply aren't possible through the public API, so they're either local-only or absent:
+
+| | |
+|---|---|
+| **Due *times*** | `due` records the date only — the API "isn't able to read or write the time that a task is due". Times set here are local reminders and won't reach Google or another device. |
+| **Recurrence** | No field exists on the v1 API, so repeating tasks aren't offered. |
+| **Starring** | No field either; stars are local-only. |
 
 ## Architecture
 
@@ -47,7 +61,8 @@ com.debzg.gotasks
 │   ├── remote/      Retrofit interface + DTOs for the Tasks REST API
 │   ├── mapper/      DTO ↔ entity ↔ domain conversions
 │   ├── repository/  Repository implementations
-│   └── sync/        Push stage, sync engine, WorkManager worker + scheduler
+│   └── sync/        Push and pull stages, sync engine, WorkManager worker + scheduler
+├── datetime/        Rule-based natural-language date parser (pure Kotlin, no Android deps)
 ├── domain/          Models and repository interfaces
 ├── presentation/    State / Intent / ViewModel / Screen per feature
 └── ui/theme/        Colors, Poppins typography, Material3 theme
@@ -122,12 +137,15 @@ Or just hit Run in Android Studio.
 - [x] Room cache + read-only mirror of tasks and lists
 - [x] Local CRUD for tasks and lists, with outbox
 - [x] Push sync with temp-id reconciliation
-- [ ] Pull sync — incremental `updatedMin`, periodic and foreground triggers
-- [ ] Natural-language due dates in quick-add, with inline highlighting
-- [ ] Subtask creation and reparenting
+- [x] Pull sync — incremental `updatedMin`, periodic and foreground triggers
+- [x] Natural-language due dates in quick-add, with inline highlighting
+- [x] Manual date/time picker
 - [ ] Reminders via local notifications
 - [ ] Home-screen widget (Jetpack Glance)
 - [ ] Release signing and polish
+
+Dropped on purpose: subtask creation/re-parenting (complexity outweighed the value — display is
+kept) and recurring tasks (unsupported by the API).
 
 ## License
 

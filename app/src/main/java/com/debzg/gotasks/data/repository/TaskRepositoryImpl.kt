@@ -30,7 +30,6 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
     taskListId: String,
     title: String,
     notes: String?,
-    parentId: String?,
     isStarred: Boolean,
     due: Instant?,
   ): String {
@@ -47,7 +46,7 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
         completed = null,
         deleted = false,
         hidden = false,
-        parent = parentId,
+        parent = null,
         position = localPosition(now),
         etag = null,
         updated = now,
@@ -63,7 +62,7 @@ class TaskRepositoryImpl(private val taskDao: TaskDao, private val outboxRecorde
       OperationType.CREATE,
       localEntityId = id,
       taskListId = taskListId,
-      payload = TaskDto(title = title, notes = notes, parent = parentId, due = due?.toGoogleDueDate()),
+      payload = TaskDto(title = title, notes = notes, due = due?.toGoogleDueDate()),
     )
     return id
   }

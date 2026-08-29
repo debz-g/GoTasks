@@ -11,7 +11,6 @@ interface TaskRepository {
     taskListId: String,
     title: String,
     notes: String? = null,
-    parentId: String? = null,
     isStarred: Boolean = false,
     due: Instant? = null,
   ): String

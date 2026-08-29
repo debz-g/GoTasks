@@ -13,7 +13,6 @@ enum class OperationType {
   CREATE,
   UPDATE,
   DELETE,
-  MOVE,
 }
 
 @Entity(tableName = "pending_operations", indices = [Index("localEntityId"), Index("taskListId")])
